@@ -1,28 +1,28 @@
 // src/config/Config.h — v6.0 DEFINITIVO
 #pragma once
 
-// ── PINOS ──────────────────────────────────────────────────────────
+// ── PINOS SEGUROS (WROOM-2 OCTAL COMPATIBLE) ────────────────────────
 #define PIN_USB_D_MINUS     19
 #define PIN_USB_D_PLUS      20
-#define PIN_UART0_RX        44   // GM861S — DESCONECTAR ao flashar
-#define PIN_UART0_TX        43
-#define PIN_WIEGAND_D0       6   // TF9S Wiegand D0
-#define PIN_WIEGAND_D1       7   // TF9S Wiegand D1
-#define PIN_UART1_RX        18   // LD2410B mmWave
-#define PIN_UART1_TX        17
-#define PIN_I2C_SDA          1   // INA219 dual
-#define PIN_I2C_SCL          2
-#define PIN_HX711_CLK       10
-#define PIN_HX711_DATA      11
-#define PIN_STRIKE_P1       45   // MOSFET LR7843 — HIGH SÓLIDO, NUNCA PWM
-#define PIN_STRIKE_P2       46   // Reservado p/ futura instalação P2
-#define PIN_SW_P1           38   // Micro switch P1 (NC, pull-up interno)
-#define PIN_SW_P2           39   // Micro switch P2 — apenas monitoramento
-#define PIN_BUTTON          35   // Botão 30mm inox
+#define PIN_UART0_RX        44   // GM861S — RX
+#define PIN_UART0_TX        43   // GM861S — TX
+#define PIN_WIEGAND_D0       1   // Remapeado (Antigo 6)
+#define PIN_WIEGAND_D1       2   // Remapeado (Antigo 7)
+#define PIN_UART1_RX        18   // mmWave
+#define PIN_UART1_TX        17   // mmWave
+#define PIN_I2C_SDA         21   // Remapeado (Antigo 1)
+#define PIN_I2C_SCL         38   // Remapeado (Antigo 2)
+#define PIN_HX711_CLK       41   // Remapeado (Antigo 10)
+#define PIN_HX711_DATA      42   // Remapeado (Antigo 11)
+#define PIN_STRIKE_P1       15   // Remapeado (Antigo 45)
+#define PIN_STRIKE_P2       16   // Remapeado (Antigo 46)
+#define PIN_SW_P1           35   // Remapeado (Antigo 38)
+#define PIN_SW_P2           36   // Remapeado (Antigo 39)
+#define PIN_BUTTON          37   // Remapeado (Antigo 35)
 #define PIN_BUZZER          48
-#define PIN_LED_BTN          4   // PWM ledc canal 0
-#define PIN_LED_QR           5   // PWM ledc canal 1
-#define PIN_COOLER          47   // PWM ledc canal 2
+#define PIN_LED_BTN         39   // Remapeado (Antigo 4)
+#define PIN_LED_QR          40   // Remapeado (Antigo 5)
+#define PIN_COOLER          47
 
 // ── CONSTANTES DE HARDWARE (nunca mudam) ────────────────────────────
 #define DEBOUNCE_SW_MS         50
