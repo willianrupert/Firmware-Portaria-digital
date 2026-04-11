@@ -21,6 +21,7 @@ class HomeAssistantIntegration:
         # Tópicos HA->OPi (Comandos de Ação)
         self.CMD_TOPIC_P2 = f"rlight/{self.DEVICE_ID}/cmd_p2"
         self.CMD_TOPIC_RELOAD = f"rlight/{self.DEVICE_ID}/cmd_reload_nvs"
+        self.CMD_TOPIC_UNLOCK_RESIDENT = f"rlight/{self.DEVICE_ID}/cmd_unlock_resident"
         
         # Tópicos HA->OPi (Textos Dinâmicos - Setters)
         self.SET_TOPIC_ENDERECO = f"rlight/{self.DEVICE_ID}/set_endereco"
@@ -49,6 +50,7 @@ class HomeAssistantIntegration:
             # Se inscreve nos topicos de Comando/Texto vindo do H.A.
             client.subscribe(self.CMD_TOPIC_P2)
             client.subscribe(self.CMD_TOPIC_RELOAD)
+            client.subscribe(self.CMD_TOPIC_UNLOCK_RESIDENT)
             client.subscribe(self.SET_TOPIC_ENDERECO)
             client.subscribe(self.SET_TOPIC_NOMES)
             client.subscribe(self.SET_TOPIC_MSG_ERRO)
@@ -62,6 +64,11 @@ class HomeAssistantIntegration:
         if topic == self.CMD_TOPIC_P2 and payload == "PRESS":
             print("[MQTT/HA] Abrir P2 Solicitado!")
             esp32_bridge.send_cmd("CMD_UNLOCK_P2")
+            
+        elif topic == self.CMD_TOPIC_UNLOCK_RESIDENT and payload == "PRESS":
+            print("[MQTT/HA] Acesso Morador Remoto Solicitado!")
+            # Aciona FSM para transição de acesso seguro
+            esp32_bridge.send_cmd("CMD_RESIDENT_UNLOCK")
             
         elif topic == self.SET_TOPIC_ENDERECO:
             dynamic_texts.ENDERECO_TEXT = payload
@@ -94,6 +101,10 @@ class HomeAssistantIntegration:
         # Sensor - Peso
         s_peso = {"name": "Balança de Ocorrências", "state_topic": self.STAT_TOPIC_WEIGHT, "unique_id": f"{self.DEVICE_ID}_peso", "unit_of_measurement": "g", "device_class": "weight", "device": device_def}
         self.client.publish(f"{self.PREFIX}/sensor/{self.DEVICE_ID}/peso/config", json.dumps(s_peso), retain=True)
+
+        # Button - Unlock Resident
+        b_unlock = {"name": "Acesso Morador Remoto", "command_topic": self.CMD_TOPIC_UNLOCK_RESIDENT, "payload_press": "PRESS", "unique_id": f"{self.DEVICE_ID}_unlock_res", "icon": "mdi:door-open", "device": device_def}
+        self.client.publish(f"{self.PREFIX}/button/{self.DEVICE_ID}/unlock_res/config", json.dumps(b_unlock), retain=True)
         
         # Text Input - HA->OPi Error
         t_err = {
