@@ -15,11 +15,23 @@ enum class State {
   CONFIRMING,     // P1 fechou, corredor vazio
   RECEIPT,        // comprovante na tela
   ABORTED,        // entrou mas não entregou
+  RESIDENT_P1,    // NOVO: morador P1
+  RESIDENT_P2,    // NOVO: morador P2
+  REVERSE_PICKUP, // NOVO: coletor reversa
   DOOR_ALERT,     // P1 aberta > timeout
   ERROR           // falha crítica bloqueante
 };
 
 struct FsmContext {
+  // Contexto de acesso de morador
+  AccessType resident_access_type = AccessType::NONE;
+  char       resident_label[32]   = "";  // "Willian Rupert"
+  uint32_t   resident_p1_opened   = 0;   // millis() quando P1 abriu para morador
+
+  // Contexto de reversa
+  char       reverse_carrier[24]  = "";  // transportadora identificada
+  float      reverse_weight_delta = 0.0f; // variação de peso (negativa = retirada)
+
   State    state              = State::IDLE;
   uint32_t state_enter        = 0;
   char     qr_code[64]        = "";
@@ -39,6 +51,11 @@ struct FsmContext {
   // Sub-estado DELIVERING (timeout)
   uint32_t delivering_start   = 0;
   bool     unconventional_exit= false;
+  // S2: Fallback mmWave 
+  uint32_t door_reopen_at     = 0;
+  bool     mmwave_fallback_used= false;
+  
+  uint32_t resident_p2_timer  = 0;   // início do delay de 2s para P2
 };
 
 class StateMachine {
@@ -54,6 +71,7 @@ private:
   FsmContext _ctx;
   void _onEnter(State s);
   void _onExit(State s);
+  void _persistDeliveryContext(); // S3: NVS Context Snapshot
   // Handlers — um por estado
   void _handleIdle(const PhysicalState& w);
   void _handleMaintenance(const PhysicalState& w);
@@ -66,5 +84,8 @@ private:
   void _handleConfirming(const PhysicalState& w);
   void _handleReceipt(const PhysicalState& w);
   void _handleAborted(const PhysicalState& w);
+  void _handleResidentP1(const PhysicalState& w);
+  void _handleResidentP2(const PhysicalState& w);
+  void _handleReversePickup(const PhysicalState& w);
   void _handleDoorAlert(const PhysicalState& w);
 };

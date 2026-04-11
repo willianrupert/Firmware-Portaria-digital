@@ -2,8 +2,16 @@
 #pragma once
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
+#include "../sensors/AccessController.h"
+
+struct AccessGranted {
+  AccessType type       = AccessType::NONE;
+  char       label[32]  = "";
+};
 
 struct PhysicalState {
+  bool          wiegand_granted  = false;
+  AccessGranted wiegand_access   = {};
   float    weight_g        = 0.0f;
   char     qr_code[64]     = "";
   char     carrier[24]     = "";

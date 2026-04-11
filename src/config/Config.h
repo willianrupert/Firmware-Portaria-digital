@@ -6,6 +6,8 @@
 #define PIN_USB_D_PLUS      20
 #define PIN_UART0_RX        44   // GM861S — DESCONECTAR ao flashar
 #define PIN_UART0_TX        43
+#define PIN_WIEGAND_D0       6   // TF9S Wiegand D0
+#define PIN_WIEGAND_D1       7   // TF9S Wiegand D1
 #define PIN_UART1_RX        18   // LD2410B mmWave
 #define PIN_UART1_TX        17
 #define PIN_I2C_SDA          1   // INA219 dual
@@ -36,9 +38,10 @@
 #define JSON_IN_BUF_SIZE    256
 #define QR_RX_BUF_SIZE      128   // buffer circular GM861S
 
-// ── SCORE PESOS DE SAÚDE ─────────────────────────────────────────────
-#define SCORE_GM861          30   // QR = sensor mais crítico da v6
-#define SCORE_HX711          25
-#define SCORE_MMWAVE         25
-#define SCORE_INA219_P1      20
-#define SCORE_INA219_P2      20
+// ── SCORE PESOS DE SAÚDE (Total 100) ─────────────────────────────────
+#define SCORE_GM861          25
+#define SCORE_WIEGAND        25
+#define SCORE_HX711          20
+#define SCORE_MMWAVE         15
+#define SCORE_INA219_P1      10
+#define SCORE_INA219_P2       5

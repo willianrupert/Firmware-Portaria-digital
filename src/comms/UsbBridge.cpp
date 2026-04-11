@@ -30,7 +30,7 @@ void UsbBridge::processIncoming() {
 }
 
 void UsbBridge::_dispatch(const char* raw) {
-  StaticJsonDocument<JSON_IN_BUF_SIZE> doc;
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, raw);
   if (error) return;
 
@@ -61,6 +61,36 @@ void UsbBridge::_dispatch(const char* raw) {
   else if (!strcmp(cmd, "CMD_CALIBRATE_SCALE")) {
     Scale::instance().calibrate(doc["weight_g"].as<float>());
   }
+  else if (!strcmp(cmd, "CMD_RESIDENT_UNLOCK")) {
+    AccessResult synthetic;
+    synthetic.type = AccessType::RESIDENT;
+    strlcpy(synthetic.label, "HA Remote", sizeof(synthetic.label));
+    fsm.ctx().resident_access_type = AccessType::RESIDENT;
+    strlcpy(fsm.ctx().resident_label, "HA Remote", sizeof(fsm.ctx().resident_label));
+    
+    if (fsm.current() == State::IDLE) {
+      if (!SharedMemory::instance().getSnapshot().p2_open) {
+        Strike::P1().open(ConfigManager::instance().cfg.door_open_ms);
+        fsm.transition(State::RESIDENT_P1);
+      }
+    }
+  }
+  else if (!strcmp(cmd, "CMD_ADD_WIEGAND_CODE")) {
+    uint32_t code  = doc["code"].as<uint32_t>();
+    const char* tl = doc["type_label"] | "RESIDENT:Morador";
+    bool ok = AccessController::instance().addCode(code, tl);
+    if(ok) sendEvent("WIEGAND_CODE_ADDED", fsm.ctx());
+  }
+  else if (!strcmp(cmd, "CMD_REMOVE_WIEGAND_CODE")) {
+    uint32_t code = doc["code"].as<uint32_t>();
+    bool ok = AccessController::instance().removeCode(code);
+    if(ok) sendEvent("WIEGAND_CODE_REMOVED", fsm.ctx());
+  }
+  else if (!strcmp(cmd, "CMD_LIST_WIEGAND_CODES")) {
+    char buf[512];
+    AccessController::instance().listCodes(buf, sizeof(buf));
+    sendEvent("WIEGAND_CODE_LIST", fsm.ctx());
+  }
   else if (!strcmp(cmd, "CMD_UNLOCK_P1")) {
     fsm.transition(State::AUTHORIZED);
   }
@@ -87,3 +117,4 @@ void UsbBridge::sendAlert(const char* alert_type, const FsmContext& ctx) { /* ..
 void UsbBridge::sendPushAlert(const char* alert_type, const FsmContext& ctx) { /* ... */ }
 void UsbBridge::sendEvent(const char* evt, const FsmContext& ctx) { /* ... */ }
 void UsbBridge::sendDelivery(const FsmContext& ctx, const PhysicalState& w, const char* jwt) { /* ... */ }
+void UsbBridge::sendReversePickup(const FsmContext& ctx, const PhysicalState& w, const char* jwt) { /* ... */ }

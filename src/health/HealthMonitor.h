@@ -7,7 +7,9 @@ enum class SensorID {
   HX711,
   MMWAVE,
   INA219_P1,
-  INA219_P2
+  INA219_P2,
+  WIEGAND,
+  _COUNT
 };
 
 class HealthMonitor {
@@ -27,5 +29,5 @@ public:
 
 private:
   HealthMonitor() = default;
-  int _failures[(int)SensorID::INA219_P2 + 1] = {0};
+  int _failures[(int)SensorID::_COUNT] = {0};
 };

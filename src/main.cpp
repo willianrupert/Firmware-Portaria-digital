@@ -1,4 +1,4 @@
-# src/main.cpp
+// src/main.cpp
 #include <Arduino.h>
 #include <esp_wifi.h>
 #include <esp_bt.h>
@@ -14,6 +14,8 @@
 #include "sensors/MmWave.h"
 #include "sensors/QRReader.h"
 #include "sensors/PowerMonitor.h"
+#include "sensors/Wiegand.h"
+#include "sensors/AccessController.h"
 #include "actuators/Strike.h"
 #include "actuators/Led.h"
 #include "actuators/Buzzer.h"
@@ -71,6 +73,26 @@ void taskSensorHub(void* pvParameters) {
         // Dentro do debounce: mantém estado anterior
       }
       HealthMonitor::instance().report(SensorID::MMWAVE, true);
+    }
+
+    // ── Wiegand (Polling Frame Completo) ─────────────────────────────
+    if (Wiegand::instance().poll()) {
+      uint32_t code = Wiegand::instance().lastCode();
+      AccessResult result = AccessController::instance().validate(code);
+
+      if (result.type != AccessType::NONE && result.type != AccessType::DENIED) {
+        state.wiegand_granted = true;
+        state.wiegand_access.type = result.type;
+        strlcpy(state.wiegand_access.label, result.label, sizeof(state.wiegand_access.label));
+        HealthMonitor::instance().report(SensorID::WIEGAND, true);
+      } else if (result.type == AccessType::DENIED) {
+        UsbBridge::instance().sendAlert("WIEGAND_ACCESS_DENIED", StateMachine::instance().ctx());
+        HealthMonitor::instance().report(SensorID::WIEGAND, true);
+      } else {
+        UsbBridge::instance().sendAlert("WIEGAND_CODE_UNKNOWN", StateMachine::instance().ctx());
+      }
+    } else {
+      state.wiegand_granted = false;
     }
 
     // ── GM861S QR Reader (buffer circular não-bloqueante) ─────────
@@ -140,6 +162,17 @@ void taskLogicBrain(void* pvParameters) {
 
     StateMachine::instance().tick(world);
 
+    // S4: Watchdog Global de Coerência (Failsafe)
+    if (StateMachine::instance().current() == State::IDLE) {
+      if (world.weight_g > ConfigManager::instance().cfg.min_delivery_weight_g) {
+        static uint32_t last_inc_warn = 0;
+        if (millis() - last_inc_warn > 15000) {
+          UsbBridge::instance().sendAlert("INCOHERENT_IDLE_WEIGHT", StateMachine::instance().ctx());
+          last_inc_warn = millis();
+        }
+      }
+    }
+
     // Tick dos atuadores assíncronos (CORREÇÃO #2 + #10)
     Strike::P1().tick(world.ina_p1_ma);
     
@@ -200,6 +233,24 @@ void setup() {
   pinMode(PIN_STRIKE_P1, OUTPUT); digitalWrite(PIN_STRIKE_P1, LOW);
   pinMode(PIN_STRIKE_P2, OUTPUT); digitalWrite(PIN_STRIKE_P2, LOW); // Setup paralelo P2
   pinMode(PIN_BUZZER,    OUTPUT); digitalWrite(PIN_BUZZER,    LOW);
+  
+  // S25: Boot Diagnostic Checklist de bancada (Segure o botão liga/desliga ao botar energia)
+  if (digitalRead(PIN_BUTTON) == LOW) {
+    Serial.println("{\"log\": \"BOOT_DIAGNOSTIC_MODE_ENTERED\", \"p1\": 1, \"p2\": 1}");
+    while(digitalRead(PIN_BUTTON) == LOW) {
+      digitalWrite(PIN_STRIKE_P1, HIGH);
+      digitalWrite(PIN_BUZZER, HIGH);
+      delay(50);
+      digitalWrite(PIN_STRIKE_P1, LOW);
+      digitalWrite(PIN_BUZZER, LOW);
+      delay(50);
+      digitalWrite(PIN_STRIKE_P2, HIGH);
+      delay(50);
+      digitalWrite(PIN_STRIKE_P2, LOW);
+      delay(50);
+    }
+  }
+
   attachInterrupt(PIN_SW_P1, isr_p1, CHANGE);
   attachInterrupt(PIN_SW_P2, isr_p2, CHANGE);
 
@@ -232,6 +283,10 @@ void setup() {
   if(ConfigManager::instance().cfg.enable_strike_p2) {
     hm.report(SensorID::INA219_P2, PowerMonitor::P2().init(0x41),  "ina_p2_init");
   }
+
+  Wiegand::instance().init();
+  AccessController::instance(); // Instancia NVS Namespace nativamente readonly offline
+  hm.report(SensorID::WIEGAND, true, "wiegand_init");
 
   // 7. Boot report
   UsbBridge::instance().sendHeartbeat(StateMachine::instance().ctx());

@@ -18,6 +18,7 @@ public:
   void sendPushAlert(const char* alert_type, const FsmContext& ctx);
   void sendEvent(const char* evt, const FsmContext& ctx);
   void sendDelivery(const FsmContext& ctx, const PhysicalState& w, const char* jwt);
+  void sendReversePickup(const FsmContext& ctx, const PhysicalState& w, const char* jwt);
 
   void processIncoming();
 

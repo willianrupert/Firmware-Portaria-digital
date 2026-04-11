@@ -8,6 +8,8 @@
 #include "../actuators/Led.h"
 #include "../comms/UsbBridge.h"
 #include "../crypto/JwtSigner.h"
+#include "../sensors/QRReader.h"
+#include <Preferences.h>
 
 StateMachine& StateMachine::instance() { static StateMachine i; return i; }
 State             StateMachine::current() const { return _ctx.state; }
@@ -15,6 +17,7 @@ const FsmContext& StateMachine::ctx()     const { return _ctx; }
 FsmContext&       StateMachine::ctx()           { return _ctx; }
 
 void StateMachine::transition(State next) {
+  _ctx.millis_at_sync = millis() - _ctx.state_enter; // S5: Uso improvisado do millis_at_sync pra não precisar trocar headers agora. UsbBridge envia.
   _onExit(_ctx.state);
   _ctx.state       = next;
   _ctx.state_enter = millis();
@@ -51,6 +54,55 @@ void StateMachine::tick(const PhysicalState& world) {
     transition(State::IDLE); return;
   }
 
+  // WIEGAND: processado em qualquer estado exceto durante entrega ativa
+  bool delivery_active = (_ctx.state == State::WAITING_QR  ||
+                          _ctx.state == State::AUTHORIZED   ||
+                          _ctx.state == State::INSIDE_WAIT  ||
+                          _ctx.state == State::DELIVERING   ||
+                          _ctx.state == State::DOOR_REOPENED||
+                          _ctx.state == State::CONFIRMING   ||
+                          _ctx.state == State::RECEIPT      ||
+                          _ctx.state == State::REVERSE_PICKUP);
+
+  if (!delivery_active && world.wiegand_granted &&
+      world.wiegand_access.type != AccessType::NONE) {
+
+    AccessType atype = world.wiegand_access.type;
+
+    if (atype == AccessType::RESIDENT) {
+      _ctx.resident_access_type = atype;
+      strlcpy(_ctx.resident_label, world.wiegand_access.label, sizeof(_ctx.resident_label));
+      if (!world.p2_open) { // interbloqueio
+        Strike::P1().open(cfg.door_open_ms);
+        Buzzer::beep(2, 150);
+        Led::btn().solid(255);
+        transition(State::RESIDENT_P1);
+      } else {
+        UsbBridge::instance().sendAlert("RESIDENT_INTERLOCK_P2", _ctx);
+      }
+      return;
+    }
+
+    if (atype == AccessType::REVERSE_CORREIOS ||
+        atype == AccessType::REVERSE_ML       ||
+        atype == AccessType::REVERSE_AMAZON   ||
+        atype == AccessType::REVERSE_GENERIC) {
+      strlcpy(_ctx.reverse_carrier,
+        atype == AccessType::REVERSE_CORREIOS ? "CORREIOS" :
+        atype == AccessType::REVERSE_ML       ? "ML"       :
+        atype == AccessType::REVERSE_AMAZON   ? "AMAZON"   : "GENERIC",
+        sizeof(_ctx.reverse_carrier));
+      _ctx.weight_g = world.weight_g;
+      if (!world.p2_open) {
+        Strike::P1().open(cfg.door_open_ms);
+        Buzzer::beep(1, 100);
+        transition(State::AUTHORIZED);
+        _ctx.carrier[0] = 'R'; // flag: 'R' = reversa
+      }
+      return;
+    }
+  }
+
   // DOOR_ALERT preemptivo: P1 aberta em qualquer estado perigoso
   if (world.p1_open && _ctx.state == State::IDLE) {
     transition(State::DOOR_ALERT); return;
@@ -73,6 +125,9 @@ void StateMachine::tick(const PhysicalState& world) {
     case State::CONFIRMING:   _handleConfirming(world);   break;
     case State::RECEIPT:      _handleReceipt(world);      break;
     case State::ABORTED:      _handleAborted(world);      break;
+    case State::RESIDENT_P1:   _handleResidentP1(world);   break;
+    case State::RESIDENT_P2:   _handleResidentP2(world);   break;
+    case State::REVERSE_PICKUP:_handleReversePickup(world);break;
     case State::DOOR_ALERT:   _handleDoorAlert(world);    break;
     default: break;
   }
@@ -154,10 +209,17 @@ void StateMachine::_handleAuthorized(const PhysicalState& w) {
     return;
   }
 
-  // P1 abriu: sucesso
+  // P1 abriu: destino depende se é entrega normal ou reversa
   if (w.p1_open) {
     _ctx.authorized_at = 0;
-    transition(State::INSIDE_WAIT); return;
+    bool is_reverse = (_ctx.carrier[0] == 'R'); // flag setada no tick()
+    if (is_reverse) {
+      transition(State::REVERSE_PICKUP);
+    } else {
+      _persistDeliveryContext(); // S3: Snapshot do pacote assim que abre
+      transition(State::INSIDE_WAIT);
+    }
+    return;
   }
 
   // CORREÇÃO #14: timeout — entregador não empurrou a porta
@@ -173,7 +235,7 @@ void StateMachine::_handleInsideWait(const PhysicalState& w) {
   auto& cfg = ConfigManager::instance().cfg;
 
   // P1 abriu antes de balança variar = entrou e saiu sem deixar nada
-  if (w.p1_open && !w.person_inside) {
+  if (w.p1_open && !w.person_present) {
     transition(State::ABORTED); return;
   }
 
@@ -223,11 +285,22 @@ void StateMachine::_handleDelivering(const PhysicalState& w) {
 void StateMachine::_handleDoorReopened(const PhysicalState& w) {
   auto& cfg = ConfigManager::instance().cfg;
 
-  // P1 fechou e corredor vazio: confirmar entrega
   bool mmwave_ok = !cfg.require_mmwave_empty ||
-    (!w.person_inside && HealthMonitor::instance().usable(SensorID::MMWAVE));
+    (!w.person_present && HealthMonitor::instance().usable(SensorID::MMWAVE));
 
+  // S2: Fallback quando mmWave degradado e entregador preso
+  if (!mmwave_ok && !HealthMonitor::instance().usable(SensorID::MMWAVE)) {
+    if (_ctx.door_reopen_at == 0) _ctx.door_reopen_at = millis();
+    uint32_t fallback_ms = cfg.radar_debounce_ms * 3;
+    if (millis() - _ctx.door_reopen_at >= fallback_ms) {
+      _ctx.mmwave_fallback_used = true;
+      mmwave_ok = true; 
+    }
+  }
+
+  // P1 fechou e corredor vazio (ou em fallback): confirmar entrega
   if (!w.p1_open && mmwave_ok) {
+    _ctx.door_reopen_at = 0;
     transition(State::CONFIRMING); return;
   }
 
@@ -235,6 +308,16 @@ void StateMachine::_handleDoorReopened(const PhysicalState& w) {
   if (millis() - _ctx.state_enter > cfg.door_alert_ms) {
     transition(State::DOOR_ALERT);
   }
+}
+
+void StateMachine::_persistDeliveryContext() {
+  Preferences p;
+  p.begin("dlv_ctx", false);
+  p.putString("qr",      _ctx.qr_code);
+  p.putString("carrier", _ctx.carrier);
+  p.putULong ("ts",      _ctx.unix_time);
+  p.putBool  ("active",  true);
+  p.end();
 }
 
 void StateMachine::_handleConfirming(const PhysicalState& w) {
@@ -293,4 +376,98 @@ void StateMachine::_handleDoorAlert(const PhysicalState& w) {
     UsbBridge::instance().sendAlert("DOOR_ALERT_RESOLVED", _ctx);
     transition(State::IDLE);
   }
+}
+
+void StateMachine::_handleResidentP1(const PhysicalState& w) {
+  auto& cfg = ConfigManager::instance().cfg;
+
+  // P1 fechou: morador entrou no corredor — iniciar delay para P2
+  if (!w.p1_open) {
+    _ctx.resident_p2_timer = millis();
+    transition(State::RESIDENT_P2);
+    return;
+  }
+
+  // Timeout: P1 ficou aberta demais sem fechar
+  if (millis() - _ctx.state_enter > cfg.door_alert_ms) {
+    UsbBridge::instance().sendAlert("RESIDENT_P1_TIMEOUT", _ctx);
+    transition(State::DOOR_ALERT);
+  }
+}
+
+void StateMachine::_handleResidentP2(const PhysicalState& w) {
+  auto& cfg = ConfigManager::instance().cfg;
+
+  // Interbloqueio: P1 voltou a abrir durante o delay? Aborta.
+  if (w.p1_open) {
+    UsbBridge::instance().sendAlert("RESIDENT_P1_REOPENED_BEFORE_P2", _ctx);
+    _ctx.resident_p2_timer = 0;
+    transition(State::IDLE);
+    return;
+  }
+
+  // Aguarda o delay de segurança (padrão 2000ms) antes de abrir P2
+  if (millis() - _ctx.resident_p2_timer < cfg.p2_delay_ms) return;
+
+  // Delay concluído: abre P2 se habilitada
+  if (cfg.enable_strike_p2) {
+    // Verifica interbloqueio P1 uma última vez
+    if (!w.p1_open && w.ina_p1_ma < cfg.ina_strike_min_ma) {
+      Strike::P2().open(cfg.door_open_ms);
+      Buzzer::beep(1, 200);
+      Led::btn().solid(255);
+    }
+  }
+
+  // Aguarda P2 abrir (confirmado pelo micro switch) ou timeout
+  if (w.p2_open) {
+    // P2 abriu: loga acesso e retorna ao IDLE
+    UsbBridge::instance().sendEvent("RESIDENT_ACCESS_COMPLETE", _ctx);
+    _ctx.resident_p2_timer = 0;
+    transition(State::IDLE);
+    return;
+  }
+
+  // P2 não abriu após (door_open_ms + 3s de margem): timeout silencioso
+  if (millis() - _ctx.resident_p2_timer > cfg.door_open_ms + 3000) {
+    UsbBridge::instance().sendAlert("RESIDENT_P2_TIMEOUT", _ctx);
+    _ctx.resident_p2_timer = 0;
+    transition(State::IDLE);
+  }
+}
+
+void StateMachine::_handleReversePickup(const PhysicalState& w) {
+  auto& cfg = ConfigManager::instance().cfg;
+
+  // P1 abriu: coletor saindo com ou sem coleta
+  if (w.p1_open) {
+    // Se houve variação negativa significativa: coleta confirmada
+    float delta = _ctx.reverse_weight_delta;  // calculado ao longo do tempo (varia negativa)
+    if (fabsf(delta) > cfg.min_delivery_weight_g) {
+      char token[9];
+      snprintf(token, sizeof(token), "%08lx", (unsigned long)esp_random());
+      uint32_t ts = _ctx.unix_time + ((millis() - _ctx.millis_at_sync) / 1000);
+      char jwt_buf[JWT_BUF_SIZE];
+      JwtSigner::instance().sign(token, "REVERSE", _ctx.reverse_carrier,
+        fabsf(delta), ts, jwt_buf, sizeof(jwt_buf));
+      UsbBridge::instance().sendReversePickup(_ctx, w, jwt_buf);
+    } else {
+      UsbBridge::instance().sendEvent("REVERSE_NO_PICKUP", _ctx);
+    }
+    transition(State::DOOR_REOPENED); // aguarda P1 fechar
+    return;
+  }
+
+  // Timeout: 3 minutos dentro sem sair
+  if (_ctx.delivering_start > 0 &&
+      millis() - _ctx.delivering_start >= cfg.delivering_timeout_ms) {
+    UsbBridge::instance().sendPushAlert("REVERSE_TIMEOUT_INSIDE", _ctx);
+    _ctx.delivering_start = 0;
+    transition(State::IDLE);
+  }
+
+  if (_ctx.delivering_start == 0) _ctx.delivering_start = millis();
+
+  // Monitora variação de peso atual para capturar o momento de esvaziamento (negativa)
+  _ctx.reverse_weight_delta = w.weight_g - _ctx.weight_g;
 }

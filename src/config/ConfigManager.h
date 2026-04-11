@@ -14,6 +14,7 @@ struct SystemConfig {
   uint32_t delivering_timeout_ms = 180000;  // DELIVERING travado → IDLE forçado
   uint32_t loitering_alert_ms    = 30000;   // mmWave sem autorização → alerta
   uint32_t scale_settle_ms       = 2000;    // estabilização balança
+  uint32_t p2_delay_ms           = 2000;    // delay entre P1 fechar e P2 abrir (evita queda tensão)
   uint32_t radar_debounce_ms     = 1500;    // ausência contínua → person=false
   uint32_t auto_zero_interval_ms = 600000;  // auto-zero RAM a cada 10min
   float    auto_zero_max_drift_g = 50.0f;   // drift máximo para auto-zero
@@ -30,7 +31,7 @@ struct SystemConfig {
   bool enable_loitering_alarm = true;  // alerta mmWave prolongado
   bool require_mmwave_empty   = true;  // radar obrigatório para CONFIRMING
   bool enable_auto_cooler     = true;  // controle térmico automático
-  bool enable_strike_p2       = false; // Ativa lógica de interlock P2 (se aplicável futuramente)
+  bool enable_strike_p2       = true;  // Ativa lógica de interlock P2 (HARDWARE PRESENTE na v7)
 };
 
 class ConfigManager {
@@ -52,6 +53,7 @@ public:
     cfg.delivering_timeout_ms = p.getUInt ("dlv_ms",     180000);
     cfg.loitering_alert_ms    = p.getUInt ("loiter_ms",  30000);
     cfg.scale_settle_ms       = p.getUInt ("scale_ms",   2000);
+    cfg.p2_delay_ms           = p.getUInt ("p2_delay",   2000);
     cfg.radar_debounce_ms     = p.getUInt ("radar_dbc",  1500);
     cfg.auto_zero_interval_ms = p.getUInt ("az_int",     600000);
     cfg.auto_zero_max_drift_g = p.getFloat("az_max",     50.0f);
@@ -66,7 +68,7 @@ public:
     cfg.enable_loitering_alarm= p.getBool ("loiter_en",  true);
     cfg.require_mmwave_empty  = p.getBool ("mmw_req",    true);
     cfg.enable_auto_cooler    = p.getBool ("cooler_en",  true);
-    cfg.enable_strike_p2      = p.getBool ("strike_p2",  false);
+    cfg.enable_strike_p2      = p.getBool ("strike_p2",  true);
     p.end();
   }
 
@@ -93,6 +95,7 @@ public:
     UPD_UINT ("dlv_ms",     delivering_timeout_ms)
     UPD_UINT ("radar_dbc",  radar_debounce_ms)
     UPD_UINT ("az_int",     auto_zero_interval_ms)
+    UPD_UINT ("p2_delay",   p2_delay_ms)
     UPD_FLOAT("az_max",     auto_zero_max_drift_g)
     UPD_FLOAT("min_w_g",    min_delivery_weight_g)
     UPD_FLOAT("ina_min",    ina_strike_min_ma)
