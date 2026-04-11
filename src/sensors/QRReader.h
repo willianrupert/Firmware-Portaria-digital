@@ -19,4 +19,8 @@ private:
   uint8_t  _rx_pos  = 0;
   char     _result[64];
   bool     _has_result = false;
+  
+  uint8_t  _failed_reads = 0;
+  uint32_t _cooldown_until = 0;
+  uint32_t _last_read_time = 0;
 };

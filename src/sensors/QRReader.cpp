@@ -13,6 +13,12 @@ bool QRReader::init() {
 const char* QRReader::poll() {
   _has_result = false;
 
+  // S20: Rate limiter
+  if (millis() < _cooldown_until) {
+    while (Serial1.available()) Serial1.read(); 
+    return nullptr;
+  }
+
   // Lê apenas bytes disponíveis — zero espera
   while (Serial1.available()) {    // UART0/1 do GM861S
     char c = (char)Serial1.read();
@@ -32,6 +38,28 @@ const char* QRReader::poll() {
         // Buffer cheio: código inválido, descarta
         _rx_pos = 0;
       }
+    }
+  }
+
+  if (_has_result) {
+    char carrier_buf[24];
+    identifyCarrier(_result, carrier_buf, sizeof(carrier_buf));
+    
+    if (!isAllowedCarrier(carrier_buf)) {
+      if (millis() - _last_read_time < 2000) {
+        _failed_reads++;
+      } else {
+        _failed_reads = 1;
+      }
+      _last_read_time = millis();
+      
+      if (_failed_reads >= 3) {
+        _cooldown_until = millis() + 5000; // 5s block
+        _failed_reads = 0;
+      }
+      return nullptr;
+    } else {
+      _failed_reads = 0;
     }
   }
 
