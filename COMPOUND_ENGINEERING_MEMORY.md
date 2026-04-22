@@ -60,8 +60,20 @@ O sistema v7 é orquestrado por dois serviços interdependentes:
 
 ---
 
-## 6. Status Final: RLight v7 "Glassmorphism"
-- [x] Migração de Pygame para FastAPI/SPA concluída.
+## 6. Access Hardware Migration (Wiegand to I2C)
+
+### The Shift to Matrix Keypad
+O antigo leitor Wiegand exigia polling intensivo e ocupava portas lógicas nobres da placa. Migramos o controle de acesso para um **Teclado Matricial (Keypad) via I2C**, utilizando o módulo expansor **PCF8574** (Endereço `0x20`).
+
+### Impacto e Benefícios:
+- **Redução de Pinos**: Apenas os pinos I2C padrão (`SDA 21`, `SCL 38`) em uso.
+- **Eficiência Computacional**: Uso do pino de interrupção (`INT`) no `GPIO 6` do ESP32 elimina o polling agressivo, reativando a rotina apenas por gatilhos de hardware (Toques Físicos).
+- **Segurança**: Foi implementada na FSM (`StateMachine`) a captura em tempo real que envia um evento reativo de `KEY_PRESS` ao frontend, providenciando o desenho instantâneo de mascaramentos de senha (`*`) sem o tráfego do dado em texto pleno pelo WebSocket.
+
+---
+
+## 7. Status Final: RLight v7 "Glassmorphism"
+- [x] Transição de hardware do controle de acesso efetuada com sucesso.
 - [x] Comunicação reativa via WebSockets estabilizada.
 - [x] Rotação vertical e layout premium integrados.
 - [x] Gestão de energia automatizada.
