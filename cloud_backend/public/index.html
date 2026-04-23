@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0d1424" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+    <title>RLight - Portaria Digital v8</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* DARK THEME (Default) */
+            --bg-color: #000000;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --input-bg: rgba(255, 255, 255, 0.05);
+            --input-border: rgba(255, 255, 255, 0.1);
+            --accent-blue: #0A84FF;
+            --accent-green: #30D158;
+            --accent-red: #FF453A;
+            --text-main: #FFFFFF;
+            --text-muted: #8E8E93;
+            --blob-opacity: 0.6;
+        }
+
+        @media (prefers-color-scheme: light) {
+            :root {
+                --bg-color: #F2F2F7;
+                --glass-bg: rgba(255, 255, 255, 0.7);
+                --glass-border: rgba(0, 0, 0, 0.05);
+                --input-bg: rgba(0, 0, 0, 0.04);
+                --input-border: rgba(0, 0, 0, 0.1);
+                --text-main: #000000;
+                --text-muted: #636366;
+                --blob-opacity: 0.3;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            overflow: hidden;
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            background-color: var(--bg-color);
+        }
+
+        body {
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: background-color 0.5s ease;
+        }
+
+        /* Full Screen Background Layer */
+        .bg-layer {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: -1;
+            background: radial-gradient(circle at top left, rgba(10, 132, 255, 0.15), transparent 40%),
+                        radial-gradient(circle at bottom right, rgba(94, 92, 230, 0.15), transparent 40%);
+            pointer-events: none;
+        }
+
+        /* Animated Background Blobs - Fixed to Viewport */
+        .blob {
+            position: absolute;
+            filter: blur(120px);
+            opacity: var(--blob-opacity);
+            animation: float 25s infinite ease-in-out alternate;
+            will-change: transform;
+            transition: opacity 0.5s ease;
+        }
+        .blob-1 {
+            width: 150vw;
+            height: 150vw;
+            background: radial-gradient(circle, var(--accent-blue) 0%, rgba(10, 132, 255, 0) 65%);
+            top: -50vw;
+            left: -30vw;
+            border-radius: 50%;
+        }
+        .blob-2 {
+            width: 150vw;
+            height: 150vw;
+            background: radial-gradient(circle, #5E5CE6 0%, rgba(94, 92, 230, 0) 65%);
+            bottom: -50vw;
+            right: -30vw;
+            border-radius: 50%;
+            animation-delay: -10s;
+        }
+
+        @keyframes float {
+            0% { transform: translate(-5%, -5%) scale(1); }
+            100% { transform: translate(10%, 15%) scale(1.1); }
+        }
+
+        /* Glassmorphism Container */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(50px);
+            -webkit-backdrop-filter: blur(50px);
+            border: 1px solid var(--glass-border);
+            z-index: 10;
+            box-shadow: 0 60px 120px -30px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow-y: auto;
+            scrollbar-width: none;
+            
+            /* Desktop/Large Screen Mode */
+            border-radius: 44px;
+            padding: 32px;
+            width: 94%;
+            max-width: 440px;
+            height: 88%;
+            max-height: 840px;
+        }
+
+        /* FULL IMMERSION FOR MOBILE (iPhone 16 Pro Max) */
+        @media (max-width: 600px) {
+            .glass-panel {
+                width: 100% !important;
+                height: 100% !important;
+                max-width: none !important;
+                max-height: none !important;
+                border-radius: 0 !important;
+                border: none !important;
+                box-shadow: none !important;
+                padding-top: calc(40px + env(safe-area-inset-top));
+                padding-bottom: calc(40px + env(safe-area-inset-bottom));
+                background: transparent; /* Deixa o background do body (blobs) aparecer sem moldura */
+            }
+        }
+
+        .glass-panel::-webkit-scrollbar { display: none; }
+
+        /* Typography */
+        h1 {
+            font-size: 26px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.8px;
+        }
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 24px;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        /* Forms */
+        .input-group {
+            width: 100%;
+            margin-bottom: 16px;
+        }
+        input {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 14px;
+            padding: 16px;
+            color: var(--text-main);
+            font-size: 17px;
+            outline: none;
+            transition: all 0.3s;
+        }
+        input::placeholder {
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+        input:focus {
+            background: var(--input-bg);
+            border-color: var(--accent-blue);
+        }
+        button {
+            width: 100%;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 14px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover { opacity: 0.9; }
+        button:active { transform: scale(0.97); }
+
+        /* Views Management */
+        .view {
+            display: none;
+            width: 100%;
+            flex-direction: column;
+            align-items: center;
+        }
+        .view.active {
+            display: flex;
+            animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.98) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        /* History List */
+        .history-item {
+            cursor: pointer;
+            width: 100%;
+            background: var(--glass-bg);
+            border-radius: 18px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+            border: 1px solid var(--glass-border);
+        }
+        .history-item:active {
+            transform: scale(0.98);
+            opacity: 0.8;
+        }
+
+        /* Detail Elements */
+        .photo-frame {
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: #1c1c1e;
+            border-radius: 16px;
+            margin-bottom: 16px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+        .photo-frame img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .receipt-card {
+            width: 100%;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 20px;
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .receipt-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+        .receipt-label { color: var(--text-muted); }
+        .receipt-value { font-weight: 500; }
+        
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 16px;
+            letter-spacing: 0.5px;
+        }
+        .status-valid { background: rgba(48, 209, 88, 0.15); color: var(--accent-green); border: 1px solid rgba(48, 209, 88, 0.1); }
+        
+        #error-msg {
+            color: var(--accent-red);
+            font-size: 14px;
+            margin-top: 12px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-layer">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2" id="blob2"></div>
+    </div>
+
+    <div class="glass-panel">
+        
+        <!-- LOGIN VIEW -->
+        <div id="view-login" class="view active">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 16px; color: var(--accent-blue);">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <h1>Acesso Restrito</h1>
+            <p class="subtitle">Portaria Digital RLight</p>
+
+            <div class="input-group">
+                <input type="text" id="username" placeholder="Usuário" spellcheck="false">
+            </div>
+            <div class="input-group">
+                <input type="password" id="password" placeholder="Senha">
+            </div>
+            
+            <button onclick="doLogin()">Entrar</button>
+            <div id="error-msg"></div>
+        </div>
+
+        <!-- DASHBOARD VIEW -->
+        <div id="view-dashboard" class="view">
+            <h1>Dashboard</h1>
+            <p class="subtitle">Sistema de Portaria Online</p>
+            
+            <div style="width: 100%;">
+                <p class="receipt-label" style="margin-bottom: 12px; font-weight: 600; padding-left: 4px;">Entregas Recentes</p>
+                <div id="history-list"></div>
+            </div>
+
+            <button style="margin-top: 24px; background: rgba(255,255,255,0.1);" onclick="logout()">Sair</button>
+        </div>
+
+        <!-- DETAILS VIEW -->
+        <div id="view-details" class="view">
+            <h1 id="det-title">Entrega Validada</h1>
+            <p class="subtitle">Comprovante Criptográfico</p>
+
+            <div class="status-badge status-valid">ASSINATURA VERIFICADA</div>
+
+            <div class="photo-frame">
+                <img id="det-photo" src="https://images.unsplash.com/photo-1566576721346-d4a3b4eaad5b?q=80&w=800&auto=format&fit=crop" alt="Foto do Pacote">
+            </div>
+
+            <div class="receipt-card">
+                <div class="receipt-row">
+                    <span class="receipt-label">Transportadora</span>
+                    <span class="receipt-value" id="det-carrier">-</span>
+                </div>
+                <div class="receipt-row">
+                    <span class="receipt-label">Peso Registrado</span>
+                    <span class="receipt-value" id="det-weight">-</span>
+                </div>
+                <div class="receipt-row">
+                    <span class="receipt-label">Data</span>
+                    <span class="receipt-value" id="det-date">-</span>
+                </div>
+            </div>
+
+            <button style="margin-top: 24px;" onclick="showView('dashboard')">Voltar</button>
+        </div>
+
+    </div>    <script>
+        let deliveries = [];
+
+        // Check for token in URL immediately
+        const urlParams = new URLSearchParams(window.location.search);
+        const jwtParam = urlParams.get('token') || urlParams.get('id');
+
+        if (jwtParam) {
+            verifyReceipt(jwtParam);
+        }
+
+        function showView(viewId) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(`view-${viewId}`).classList.add('active');
+        }
+
+        async function doLogin() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            const errEl = document.getElementById('error-msg');
+
+            if(!u || !p) {
+                errEl.textContent = "Preencha os campos.";
+                return;
+            }
+
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: u, password: p })
+            });
+            const data = await res.json();
+
+            if(data.success) {
+                showView('dashboard');
+                loadHistory();
+            } else {
+                errEl.textContent = "Acesso Negado.";
+            }
+        }
+
+        async function verifyReceipt(jwt) {
+            showView('details');
+            const detTitle = document.getElementById('det-title');
+            detTitle.textContent = "Validando...";
+            
+            const res = await fetch('/api/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jwt })
+            });
+            const result = await res.json();
+
+            if (result.valid) {
+                detTitle.textContent = "Entrega Validada";
+                document.getElementById('det-carrier').textContent = result.data.carrier || "Desconhecida";
+                document.getElementById('det-weight').textContent = (result.data.weight / 1000).toFixed(2) + " kg";
+                document.getElementById('det-date').textContent = new Date(result.data.ts * 1000).toLocaleString('pt-BR');
+            } else {
+                detTitle.textContent = "Falha na Assinatura";
+                document.querySelector('.status-badge').className = "status-badge status-invalid";
+                document.querySelector('.status-badge').textContent = "TOKEN INVÁLIDO";
+            }
+        }
+
+        async function loadHistory() {
+            const res = await fetch('/api/history');
+            deliveries = await res.json();
+            
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
+
+            deliveries.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.onclick = () => showDetails(index);
+                
+                const date = new Date(item.ts).toLocaleDateString('pt-BR', {hour: '2-digit', minute:'2-digit'});
+                
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <p style="font-size:15px; font-weight:600;">${item.carrier}</p>
+                            <p style="font-size:12px; color:var(--text-muted);">${date}</p>
+                        </div>
+                        <div style="text-align:right;">
+                            <p style="font-size:14px; font-weight:600; color:var(--accent-green);">${item.weight}</p>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function showDetails(index) {
+            const item = deliveries[index];
+            document.getElementById('det-title').textContent = "Entrega Validada";
+            document.getElementById('det-carrier').textContent = item.carrier;
+            document.getElementById('det-weight').textContent = item.weight;
+            document.getElementById('det-date').textContent = new Date(item.ts).toLocaleString('pt-BR');
+            
+            const photos = [
+                "https://images.unsplash.com/photo-1566576721346-d4a3b4eaad5b?q=80&w=800",
+                "https://images.unsplash.com/photo-1580674285054-bed31e145f59?q=80&w=800",
+                "https://images.unsplash.com/photo-1586769852044-692d6e3703f0?q=80&w=800"
+            ];
+            document.getElementById('det-photo').src = photos[index % 3];
+
+            showView('details');
+        }
+
+        function logout() {
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>
