@@ -120,3 +120,45 @@ Versões de firmware do ESP32-S3, software do Orange Pi e interface web são num
 ### Hardware
 - **TF9S instalado:** Controle de acesso com teclado 4×3, leitor RFID IC, leitor de digital. Interface Wiegand D0 (GPIO 6) / D1 (GPIO 7). Pull-up externo 2,2kΩ recomendado em ambos os pinos.
 - **Strike P2 (GPIO 46) instalado:** MOSFET LR7843, flyback 1N4007. High sólido nunca PWM.
+
+---
+
+## [v6.0.0] — Firmware Definitivo AMP FreeRTOS e Zero NVS Wear
+**Data:** Março de 2026
+**Codinome:** *Capibaribe*
+**Foco:** Arquitetura de produção industrial, longevidade de hardware, código que dura anos sem manutenção.
+
+### Added
+- **Arquitetura AMP (Asymmetric Multiprocessing) com FreeRTOS:**
+  - `taskSensorHub` (Core 1, 20Hz): todos os sensores físicos. Nunca executa lógica de negócio.
+  - `taskLogicBrain` (Core 0, 100Hz): FSM, JWT, USB, cockpit HA. Nunca acessa hardware diretamente.
+  - `loop()` do Arduino deletado com `vTaskDelete(NULL)`. Sem task ociosa.
+- **`SharedMemory` com `SemaphoreHandle_t` Mutex:** Único canal de dados entre os núcleos. `update()` do Core 1, `getSnapshot()` do Core 0. Timeout de 10ms no `xSemaphoreTake` — Core 1 nunca bloqueia por Core 0 lento. `sample_age_ms` calculado fora do mutex para não aumentar tempo de lock.
+- **`ConfigManager` data-driven com wear-leveling:** Todos os thresholds operacionais em NVS `Preferences`. Macro `UPD_UINT/FLOAT/BOOL` compara valor antes de qualquer `putX()`. Somente escreve na Flash quando o valor realmente muda. Contador teórico da Flash: ~100.000 ciclos de apagamento por célula — com wear-leveling, o ConfigManager pode ser usado diariamente por décadas.
+- **Timestamp extrapolado entre sincronizações:** `ts = unix_time + ((millis() - millis_at_sync) / 1000)`. Aplicado em `CONFIRMING` e `DELIVERING` (unconventional exit). JWTs com horário preciso mesmo durante os 10 minutos entre sincronizações DS3231.
+- **TWDT (Task Watchdog Timer) em ambos os núcleos:** `esp_task_wdt_init(5, true)` — panic se qualquer task não resetar em 5s. `esp_task_wdt_add(NULL)` em `taskSensorHub` (Core 1). `esp_task_wdt_reset()` em cada ciclo de ambas as tasks. HX711 travado por fio solto é detectado em 5s e causa reboot limpo.
+- **Telemetria em RAM, entregas no SD (correção #13):** `/dev/shm/rlight_telemetry.db` (RAM disk nativo do Linux) para heartbeats, state transitions e sensor events. `/var/lib/rlight/deliveries.db` (MicroSD com SQLite WAL) apenas para entregas confirmadas e alertas críticos. Heartbeat a cada 60s = 1440 escritas/dia — com RAM disk, zero desgaste do SD para telemetria.
+- **Feature toggles via HA sem reflash:** `maintenance_mode`, `enable_loitering_alarm`, `require_mmwave_empty`, `enable_auto_cooler`, `enable_strike_p2`. Todos em NVS, alteráveis via `CMD_UPDATE_CFG`. O sistema se comporta diferente sem nenhuma linha de código alterada.
+- **Boot com leitura raw da balança antes da tare:** `Scale::initRaw()` lê o peso bruto antes de qualquer tare. Se `weight > min_delivery_weight_g` e P1 está fechada, o sistema detecta pacote residual de ciclo anterior interrompido por queda de energia. Evento `BOOT_RESIDUAL_WEIGHT` enviado ao OPi. Sem isso: tare zeraria o peso de um pacote que já está lá.
+
+### Changed
+- **`tare()` opera exclusivamente em RAM (correção #12):** A versão anterior da tare gravava `_zero_offset` na NVS a cada chamada. `tare()` é chamada no boot e pode ser chamada manualmente via `CMD_TARE_SCALE`. Com uso moderado, isso consumiria centenas de ciclos de Flash por mês. Corrigido: `_zero_offset` vive exclusivamente em RAM. `cal_factor` (calibração com peso conhecido) é o único valor que vai para a NVS, e apenas quando muda.
+- **`QRReader::poll()` com buffer circular não-bloqueante (correção análoga #3):** Mesmo padrão do `UsbBridge`. Lê um `char` por ciclo, sem `Serial.readString()` bloqueante. Zero interferência no timing do HX711 e do mmWave no Core 1.
+
+### Fixed
+- **`StaticJsonDocument` incompatível com ArduinoJson v7 (correção #9):** A API v7 baniu `StaticJsonDocument<N>` e `DynamicJsonDocument`. Substituído por `JsonDocument doc` sem template em todo o `UsbBridge`. O pool de memória é gerenciado internamente pela biblioteca sem fragmentação.
+- **millis() overflow a cada 49,7 dias (correção #10):** Toda aritmética de temporização migrada de comparação com soma (`millis() >= _open_until`) para subtração de `uint32_t` (`millis() - _opened_at >= _duration`). Por propriedade da aritmética modular de inteiros não-assinados, a subtração é sempre correta mesmo após rollover. Afetava o Strike, todos os timers da FSM e o auto-zero da balança.
+- **TWDT cego no Core 1 (correção #11):** A versão anterior registrava o watchdog apenas na task principal do Arduino (Core 0). A `scalePollerTask` no Core 1 ficava fora do radar — HX711 travado por fio solto nunca causava reboot. Corrigido: `esp_task_wdt_add(NULL)` e `reset` dentro da task do Core 1.
+
+### Removed
+- **ZW111 biométrico:** Removido definitivamente. Leitor biométrico de superficie plana em ambiente externo tropical (80%+ umidade, poeira, luz solar direta) apresenta taxa de falha inaceitável. Acesso de moradores via TF9S (v7) ou chave física.
+- **Estado `THEFT_ALERT`:** Lógica de vigilância de furto pós-entrega removida. O morador acessa o corredor para buscar a encomenda, causando falso positivo inevitável da balança em IDLE. A câmera Intelbras com DVR independente é a evidência forense — mais confiável que lógica de peso.
+- **Estado `RECOVERY_WAIT` como estado navegável:** Simplificado para detecção no `setup()` + evento assíncrono `BOOT_RESIDUAL_WEIGHT` ao OPi. Sem estado adicional na FSM.
+- **`loop()` do Arduino:** Substituído por `vTaskDelete(NULL)`. Em arquitetura FreeRTOS pura, a task do Arduino fica ociosa consumindo recursos. Agora é deletada no boot.
+
+### Security
+- **RF desligado permanentemente no nível de silício (correção #8 consolidada):** `esp_wifi_stop()`, `esp_wifi_deinit()`, `esp_bt_controller_disable()` são as três primeiras linhas do `setup()`. Air-gapped por design desde o primeiro ciclo de clock. Superfície de ataque remoto: zero.
+- **NVS encryption via eFuse:** O segredo JWT é protegido pela Flash Encryption nativa do ESP32-S3. Extração física requer decapagem do chip e microscopia eletrônica.
+
+### Hardware
+- **Plataforma balança de piso (80×70cm):** HX711 + 4 células de carga 50kg (200kg nominal). Substituiu a balança de prateleira. Resolve: pacotes grandes que não cabem na prateleira, detecção de coleta reversa, suporta pessoa andando (pico ~100kg com fator de impacto — dentro da margem). `FLOOR_TRIGGER_S = 3s` discrimina passagem de pessoa de depósito estático.
