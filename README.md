@@ -1,4 +1,4 @@
-# rlight — Uma Portaria que Pensa (Firmware v7)
+# rlight — Uma Portaria que Pensa (Firmware v8)
 
 Bem-vindo ao repositório do **rlight-firmware-v6**. 
 Esta documentação é uma adaptação técnica da [Visão de Produto Original](https://docs.google.com/document/d/16W1DhlyzR_M756VwtquH-GJW7is5pEe3DV4iOpLja9g/edit), refletindo **exatamente** o que foi implementado na arquitetura de código C++ / PlatformIO deste projeto para o microcontrolador ESP32-S3.
@@ -17,6 +17,17 @@ O fluxo de trabalho abandonou o `loop()` tradicional do Arduino e foi dividido e
 ### 1.1. Inclusão da Trava P2 Flexível
 Foi solicitado que a **Strike P2** (Fechadura eletromagnética interna da residência) estivesse presente na arquitetura de software, mas fisicamente desativada por padrão visando máxima segurança. 
 Nós implementamos o `Strike::P2()` assíncrono exatamente como o P1, atrelado ao `GPIO 46` com a classe `PowerMonitor::P2()`. Todavia, toda a lógica da FSM a ignora a menos que o morador altere a NVS (Flash) de configuração remotamente (`strike_p2 = true`) ou que envie expressamente o comando digital json `CMD_UNLOCK_P2` via rede.
+
+---
+
+## 1.1. Novidades da Versão 8 (Orquestração Total)
+
+A v8 eleva o rlight de um controlador de porta para um **Gerenciador de Acesso Perimetral completo**.
+
+*   **Controle de Portão Garen Niid**: Integração nativa via pulso de botoeira para controle de motores de portão eletrônico.
+*   **Reed Switches Magnéticos**: Substituição de micro-switches mecânicos por sensores magnéticos (P1, P2 e Portão), garantindo maior durabilidade e precisão.
+*   **Botão de Saída Interno**: Adição de um botão físico dedicado para liberação imediata da porta interna (P2) pelo morador.
+*   **Arquitetura AMP Estabilizada**: Separação rigorosa entre `taskLogicBrain` (Core 0) e `taskSensorHub` (Core 1).
 
 ---
 
