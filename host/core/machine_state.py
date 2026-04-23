@@ -12,6 +12,9 @@ class MachineState:
         self._jwt_token = None
         self._carrier = ""
         self._resident_label = ""
+        self._p1_open = False
+        self._p2_open = False
+        self._gate_open = False
         
         self._lock = threading.Lock()
         self._listeners = []
@@ -43,6 +46,13 @@ class MachineState:
                 
             if "resident_label" in payload:
                 self._resident_label = payload["resident_label"]
+                
+            if "p1_open" in payload:
+                self._p1_open = payload["p1_open"]
+            if "p2_open" in payload:
+                self._p2_open = payload["p2_open"]
+            if "gate_open" in payload:
+                self._gate_open = payload["gate_open"]
 
         if changed:
             self._notify_listeners()
@@ -80,6 +90,18 @@ class MachineState:
     def get_resident_label(self):
         with self._lock:
             return self._resident_label
+
+    def get_p1_open(self):
+        with self._lock:
+            return self._p1_open
+
+    def get_p2_open(self):
+        with self._lock:
+            return self._p2_open
+
+    def get_gate_open(self):
+        with self._lock:
+            return self._gate_open
 
 # Instância Singleton global para o host
 host_fsm = MachineState()
