@@ -27,13 +27,15 @@ Abaixo estão os componentes técnicos exatos para a construção da portaria:
 *   **1x Balança de Carga:** Módulo Amplificador A/D de 24 bits **HX711**.
 *   **4x Células de Carga:** Strain Gauges de 50kg cada (Formando uma ponte de Wheatstone para 200kg totais).
 *   **2x Sensores de Tensão/Corrente I2C:** Texas Instruments **INA219** (Monitoramento anti-sabotagem das travas).
-*   **2x Sensores Magnéticos:** Reed Switch NA (Normalmente Aberto) com imã (Sensores de porta P1 e P2).
+*   **3x Sensores Magnéticos:** Reed Switch NA com imã (Sensores de porta P1, P2 e Portão Principal).
 
 ### Atuadores e Interface
 *   **1x Display:** Tela LCD TFT 7" polegadas (1024x600) com interface micro-HDMI.
-*   **1x Módulo Relé/MOSFET:** Módulo de Relé Óptico de 4 Canais (Isolamento Galvânico de 12V).
+*   **1x Módulo Relé de 1 Canal:** Relé de contato seco isolado (Apenas para pulso na botoeira do motor do portão).
+*   **Módulos MOSFET (Isolamento Óptico):** Placa de acionamento em estado sólido (PWM/DC) para controle das Travas Strike P1, P2 e do Cooler 40mm, sem desgaste mecânico.
 *   **2x Travas Eletromagnéticas:** Fechadura "Strike" Fail-Secure 12V (Abre apenas com pulso elétrico).
 *   **1x Botão Push-Button Metálico:** 16mm/19mm NA com LED Halo iluminado (5V/12V).
+*   **1x Botão Push-Button (Saída):** Botão NA para liberação interna da porta P2.
 *   **1x Buzzer Ativo:** 5V para alertas sonoros.
 *   **1x Cooler com Filtro:** Micro-ventilador DC 12V 40x40x10mm com tela filtro de poeira (Para refrigeração do quadro).
 *   **2x Diodos Retificadores:** 1N4007 (Para Diodo Flyback das fechaduras magnéticas).
@@ -41,8 +43,9 @@ Abaixo estão os componentes técnicos exatos para a construção da portaria:
 ### Infraestrutura e Energia
 *   **1x Fonte de Lógica:** Fonte Chaveada Mean Well RS-25-5 (5V / 5A) - Estabilidade absoluta.
 *   **1x Fonte de Potência:** Fonte Chaveada Mean Well RS-50-12 (12V / 4.2A).
-*   **1x Conector Multivias:** Conector Circular Aviação GX16 de 16 Pinos (Macho e Fêmea).
-*   **Vários:** Conectores RJ45 (Keystones fêmea e Plugs Macho RJ45), Cabos de Rede Cat5e FTP, Fios cabinho AWG 22 (para jumper).
+*   **1x Conector Multivias Principal:** Conector Circular Aviação GX16 de 16 Pinos (Macho e Fêmea).
+*   **5x Conectores Multivias Periféricos:** Conector Circular Aviação de 6 Pinos (Macho e Fêmea).
+*   **Vários:** Cabos de Rede Cat5e FTP, Fios cabinho AWG 22 (para jumper).
 
 ---
 
@@ -100,39 +103,56 @@ Todo o sinal do **Ambiente A** para o **Ambiente C** passa pelo Conector GX16 (1
 
 ---
 
-## 5. Especificação dos Chicotes RJ45 (Periféricos Isolados)
+## 5. Chicotes Periféricos (Conectores Aviação 6 Pinos)
 
-Conectores Keystones RJ45 blindados instalados no Painel C fornecem tomadas para cada periférico da portaria. Utiliza-se a pinagem padrão T568B:
+Os periféricos do Ambiente B e os módulos isolados usam cabos Cat5e FTP, mas são ligados à Central C através de **5x Conectores tipo Aviação de 6 Pinos**, garantindo uma fixação mecânica imune a vibrações (RJ45 foi descontinuado).
 
-### 5.1. Chicote 1: Radar mmWave (Hi-Link LD2410B)
-O módulo LD2410B possui 5 pinos: `VCC`, `GND`, `TX`, `RX`, `OUT`. O `OUT` pode ser ignorado pois usamos o protocolo UART serial complexo (Distâncias e alvos dinâmicos).
-*   **Branco/Laranja:** LD2410B `VCC` (Alimentado pela Fonte 5V Lógica)
-*   **Laranja:** LD2410B `GND`
-*   **Branco/Verde:** LD2410B `RX` -> ESP32 `GPIO 17` (UART1 TX)
-*   **Azul:** LD2410B `TX` -> ESP32 `GPIO 18` (UART1 RX)
+### 5.1. Chicote 1 — Radar mmWave Hi-Link LD2410B
+O LD2410B detecta presença humana por ondas milimétricas de 24GHz. Possui 5 pinos funcionais, mas usamos apenas 4.
+*   **Pino 1:** LD2410B `VCC` (5V Lógica)
+*   **Pino 2:** LD2410B `GND`
+*   **Pino 3:** LD2410B `RX` -> ESP32 `GPIO 17` (UART1 TX)
+*   **Pino 4:** LD2410B `TX` -> ESP32 `GPIO 18` (UART1 RX)
+*   **Pino 5 e 6:** Não utilizados
 
-### 5.2. Chicote 2: Balança (Módulo HX711)
-A balança requer ausência de ruídos na ponte de Wheatstone analógica. Portanto, o amplificador HX711 **deve ficar junto das células de carga**, e do HX711 envia-se o sinal digital via RJ45 até o painel central.
-*   **Células -> HX711 (Fiação na base da balança):**
-    *   HX711 `E+` -> Fio Vermelho (Excitation +)
-    *   HX711 `E-` -> Fio Preto (Excitation -)
-    *   HX711 `A-` -> Fio Branco (Signal -)
-    *   HX711 `A+` -> Fio Verde (Signal +)
-*   **Chicote RJ45 (HX711 -> Painel C):**
-    *   **Branco/Laranja:** HX711 `VCC` (5V Lógica)
-    *   **Laranja:** HX711 `GND`
-    *   **Branco/Verde:** HX711 `SCK` (Clock) -> ESP32 `GPIO 41`
-    *   **Azul:** HX711 `DT` (Data) -> ESP32 `GPIO 42`
+O pino OUT do radar foi ignorado pois o sistema usa o protocolo UART serial completo.
 
-### 5.3. Chicotes 3 e 4: Fechaduras (Strikes P1 e P2) + Reed Switches
-*   **Branco/Laranja:** Strike 12V VCC (Ligado direto na Fonte 12V Positivo)
-*   **Laranja:** Strike 12V GND (Ligado na saída do Relé, fechando circuito para a Fonte 12V)
-*   **Azul:** Reed Switch GND -> Terra da Fonte Lógica 5V.
-*   **Branco/Azul:** Reed Switch Sinal -> ESP32 `GPIO 4` (P1) ou `GPIO 5` (P2)
+### 5.2. Chicote 2 — Balança HX711 + Células de Carga
+A balança usa quatro células de carga de 50kg. O amplificador HX711 DEVE ficar fisicamente junto das células para evitar ruído.
+*   **Fiação na base da balança:** `E+` (Vermelho), `E-` (Preto), `A-` (Branco), `A+` (Verde).
+*   **Conector Aviação 6 Pinos (Painel C):**
+    *   **Pino 1:** HX711 `VCC` (5V Lógica)
+    *   **Pino 2:** HX711 `GND`
+    *   **Pino 3:** HX711 `SCK` -> ESP32 `GPIO 41`
+    *   **Pino 4:** HX711 `DT` -> ESP32 `GPIO 42`
+    *   **Pino 5 e 6:** Não utilizados
+
+### 5.3. Chicote 3 — Porta Externa P1 (Trava + Reed P1)
+*   **Pino 1:** Strike VCC (+12V da Fonte)
+*   **Pino 2:** Strike GND (Sincronizado ao Dreno do MOSFET)
+*   **Pino 3:** Reed Switch P1 GND (Terra Lógica 5V)
+*   **Pino 4:** Reed Switch P1 Sinal -> ESP32 `GPIO 4`
+*   **Pino 5 e 6:** Não utilizados
+
+### 5.4. Chicote 4 — Porta Interna P2 (Trava + Reed P2 + Botão Interno)
+*   **Pino 1:** Strike VCC (+12V da Fonte)
+*   **Pino 2:** Strike GND (Sincronizado ao Dreno do MOSFET)
+*   **Pino 3:** GND Comum Lógica 5V (Para o Reed e para o Botão Interno)
+*   **Pino 4:** Reed Switch P2 Sinal -> ESP32 `GPIO 5`
+*   **Pino 5:** Botão Interno P2 Sinal -> ESP32 `GPIO 12`
+*   **Pino 6:** Não utilizado
+
+### 5.5. Chicote 5 — Portão Principal (Garen)
+O motor do portão requer apenas um pulso de contato seco (sem injetar tensão), acionado pelo módulo Relé de 1 Canal.
+*   **Pino 1:** Relé NO (Normalmente Aberto) -> Entrada BOT do Motor Garen
+*   **Pino 2:** Relé COM (Comum) -> Entrada GND do Motor Garen
+*   **Pino 3:** Reed Switch Portão GND (Terra Lógica 5V)
+*   **Pino 4:** Reed Switch Portão Sinal -> ESP32 `GPIO 13`
+*   **Pino 5 e 6:** Não utilizados
 
 > [!CAUTION]
 > **Diodo Flyback Obrigatório:**
-> É mandatório soldar o Diodo `1N4007` **junto à fechadura (na porta)**, em paralelo com a bobina, inversamente polarizado: Catodo (faixa prata) no fio de 12V, e Anodo no fio de GND. Isso absolve a descarga indutiva da bobina. Sem ele, a vida útil do Relé despenca e a Fonte 12V joga ruído elétrico na Breakout Board.
+> É mandatório soldar o Diodo `1N4007` **junto à fechadura (na porta)**, em paralelo com a bobina, inversamente polarizado: Catodo (faixa prata) no fio de 12V, e Anodo no fio de GND. Isso absolve a descarga indutiva da bobina. Sem ele, o MOSFET pode entrar em curto-circuito (avalanche térmica) e a Fonte 12V joga ruído elétrico na Breakout Board.
 
 ---
 
